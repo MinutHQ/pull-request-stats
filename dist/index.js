@@ -41582,90 +41582,11 @@ module.exports = (tableData, sortBy) => {
 
 /***/ }),
 
-/***/ 7315:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-const { getRepoOwner } = __nccwpck_require__(2051);
-
-module.exports = ({ org, repos } = {}) => {
-  const logins = new Set();
-  if (org) logins.add(org);
-  (repos || []).forEach((repo) => logins.add(getRepoOwner(repo)));
-  return [...logins];
-};
-
-
-/***/ }),
-
 /***/ 4315:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-const { fetchSponsorships } = __nccwpck_require__(8001);
-const getLogins = __nccwpck_require__(7315);
-const isSponsoring = __nccwpck_require__(4585);
-const isExternalSponsor = __nccwpck_require__(8056);
-
-module.exports = async ({
-  octokit,
-  org,
-  repos,
-}) => {
-  const logins = getLogins({ org, repos });
-  const { user } = await fetchSponsorships({ octokit, logins });
-  return isSponsoring(user) || isExternalSponsor(logins);
-};
-
-
-/***/ }),
-
-/***/ 8056:
-/***/ ((module, __unused_webpack_exports, __nccwpck_require__) => {
-
-const axios = (__nccwpck_require__(8757)["default"]);
-const crypto = __nccwpck_require__(6113);
-const core = __nccwpck_require__(2186);
-const { t } = __nccwpck_require__(6830);
-
-// A list of organizations which are sponsoring this project outside Github 💙
-// (hashed to keep them private)
-const FILE_URL = 'https://raw.githubusercontent.com/manuelmhtr/private-sponsors/main/list.json';
-const offlineSponsors = new Set([
-  'd6ffa1c8205ff50605752d1fff1fa180',
-]);
-
-const getHash = (str) => crypto
-  .createHash('md5')
-  .update(str.toLowerCase())
-  .digest('hex');
-
-// Get a json file from a url
-const getList = async (url) => {
-  try {
-    const response = await axios.get(url);
-    const data = response.data || [];
-    core.debug(t('execution.sponsors.external.fetch.success', { data }));
-    return new Set([...data, ...offlineSponsors]);
-  } catch (error) {
-    core.error(t('execution.sponsors.external.fetch.error', { error }));
-    return offlineSponsors;
-  }
-};
-
-module.exports = async (logins) => {
-  const list = await getList(FILE_URL);
-  return [...(logins || [])]
-    .some((login) => list.has(getHash(login)));
-};
-
-
-/***/ }),
-
-/***/ 4585:
 /***/ ((module) => {
 
-module.exports = (list = {}) => Object
-  .values(list)
-  .some((value) => value === true);
+// eslint-disable-next-line no-unused-vars
+module.exports = async (_params) => true;
 
 
 /***/ }),
