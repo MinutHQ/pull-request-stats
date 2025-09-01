@@ -36,4 +36,16 @@ describe('Interactors | .buildTable | .buildReviewTimeLink', () => {
     expect(response.length <= MAX_LENGTH).toEqual(true);
     expect(MAX_LENGTH - response.length < 16).toEqual(true);
   });
+
+  it('handles reviews with Infinity timeToReview', () => {
+    const infinityReview = {
+      timeToReview: Infinity,
+      submittedAt: new Date('2021-03-12T17:41:18.000Z').toISOString(),
+    };
+    const response = buildReviewTimeLink({ ...reviewer, reviews: [infinityReview] }, period);
+
+    // Should not contain the Infinity value in the URL
+    expect(response).not.toContain('inf');
+    expect(response).toContain('https://app.flowwer.dev/charts/review-time/');
+  });
 });

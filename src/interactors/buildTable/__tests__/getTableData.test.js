@@ -102,6 +102,24 @@ describe('Interactors | .buildTable | .getTableData', () => {
     });
   });
 
+  describe('when handling Infinity values', () => {
+    it('handles reviewers with Infinity timeToReview without crashing', () => {
+      const reviewersWithInfinity = [
+        {
+          author: { login: 'user1', avatarUrl: 'https://avatars.githubusercontent.com/u/1234', url: 'https://github.com/user1' },
+          stats: { totalReviews: 0, totalComments: 0, timeToReview: Infinity },
+          contributions: { totalReviews: 0, totalComments: 0, timeToReview: Infinity },
+          urls: { timeToReview: 'https://example.com' }
+        }
+      ];
+      
+      // This should not throw an error
+      expect(() => {
+        getTableData({ reviewers: reviewersWithInfinity, displayCharts: true });
+      }).not.toThrow();
+    });
+  });
+
   describe('when sending bests and display charts', () => {
     it('returns the data with charts and medals', () => {
       const response = getTableData({ bests, reviewers, displayCharts: true });

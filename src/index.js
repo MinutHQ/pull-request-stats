@@ -39,6 +39,7 @@ const getParams = () => {
     limit: parseInt(core.getInput('limit'), 10),
     excludeStr: core.getInput('exclude'),
     excludeTitleRegex: core.getInput('excludeTitle'),
+    requiredAuthors: core.getInput('requiredAuthors'),
     telemetry: core.getBooleanInput('telemetry'),
     webhook: core.getInput('webhook'),
     slack: {

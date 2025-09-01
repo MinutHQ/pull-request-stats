@@ -3,10 +3,10 @@ const buildSubtitle = require('../buildSubtitle');
 const buildReviewer = require('../buildReviewer');
 
 const SUBTITLE = 'SUBTITLE';
-const REVIEWER = 'REVIEWER';
+const REVIEWER_TABLE = 'REVIEWER_TABLE';
 
 jest.mock('../buildSubtitle', () => jest.fn(() => [SUBTITLE]));
-jest.mock('../buildReviewer', () => jest.fn(() => [REVIEWER]));
+jest.mock('../buildReviewer', () => jest.fn(() => REVIEWER_TABLE));
 
 const defaultOptions = {
   reviewers: ['REVIEWER 1'],
@@ -27,7 +27,7 @@ describe('Interactors | postSlackMessage | .buildMessage', () => {
     expect(response).toEqual({
       blocks: [
         SUBTITLE,
-        REVIEWER,
+        REVIEWER_TABLE,
       ],
     });
   });
@@ -41,16 +41,19 @@ describe('Interactors | postSlackMessage | .buildMessage', () => {
     });
     expect(buildReviewer).toHaveBeenCalledWith({
       t: expect.anything(),
-      index: 0,
-      reviewer: defaultOptions.reviewers[0],
-      disableLinks: defaultOptions.disableLinks,
+      reviewers: defaultOptions.reviewers,
       displayCharts: defaultOptions.displayCharts,
     });
   });
 
-  it('builds a reviewers per each passed', () => {
+  it('calls buildReviewer once with all reviewers', () => {
     const reviewers = ['REVIEWER 1', 'REVIEWER 2', 'REVIEWER 3'];
     buildMessage({ ...defaultOptions, reviewers });
-    expect(buildReviewer).toHaveBeenCalledTimes(reviewers.length);
+    expect(buildReviewer).toHaveBeenCalledTimes(1);
+    expect(buildReviewer).toHaveBeenCalledWith({
+      t: expect.anything(),
+      reviewers,
+      displayCharts: defaultOptions.displayCharts,
+    });
   });
 });

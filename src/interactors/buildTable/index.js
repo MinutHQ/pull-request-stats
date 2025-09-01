@@ -8,7 +8,7 @@ module.exports = ({
   disableLinks,
   displayCharts,
 }) => {
-  const execute = () => {
+    const execute = () => {
     const allStats = reviewers.map((r) => r.stats);
     const bests = calculateBests(allStats);
 

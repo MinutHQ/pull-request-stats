@@ -33,6 +33,7 @@ const run = async (params) => {
     displayCharts,
     pullRequestId,
     excludeTitleRegex,
+    requiredAuthors,
   } = params;
 
   const pullRequest = pullRequestId
@@ -54,8 +55,9 @@ const run = async (params) => {
   core.info(`Found ${pulls.length} pull requests to analyze`);
   // Log the title of each pull request
   pulls.forEach((pull) => core.debug(`Pull request title: ${pull.title}`));
-  const reviewersRaw = getReviewers(pulls, { excludeStr: params.excludeStr });
+  const reviewersRaw = getReviewers(pulls, { excludeStr: params.excludeStr, requiredAuthors });
   core.info(`Analyzed stats for ${reviewersRaw.length} pull request reviewers`);
+  core.debug(`Reviewers raw data: ${JSON.stringify(reviewersRaw.map((r) => ({ login: r.author.login, stats: r.stats })), null, 2)}`);
 
   const reviewers = setUpReviewers({
     limit,

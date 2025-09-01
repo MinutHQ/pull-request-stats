@@ -2,104 +2,140 @@ const { t } = require('../../../../i18n');
 const buildReviewer = require('../buildReviewer');
 const reviewers = require('../../../__tests__/mocks/populatedReviewers.json');
 
-const [reviewer] = reviewers;
+const [firstReviewer] = reviewers;
 const defaultParams = {
   t,
-  reviewer,
-  index: 0,
-  disableLinks: true,
+  reviewers: [firstReviewer],
   displayCharts: false,
 };
 
-const DIVIDER = {
-  type: 'divider',
-};
-
-const USERNAME = {
-  type: 'context',
-  elements: [
+const EXPECTED_TABLE = {
+  type: 'table',
+  column_settings: [
     {
-      type: 'image',
-      image_url: 'https://avatars.githubusercontent.com/u/1234',
-      alt_text: 'user1',
+      is_wrapped: true,
     },
     {
-      emoji: true,
-      type: 'plain_text',
-      text: 'user1',
+      align: 'right',
+    },
+    {
+      align: 'right',
+    },
+    {
+      align: 'right',
     },
   ],
-};
-
-const STATS = {
-  type: 'section',
-  fields: [
-    {
-      type: 'mrkdwn',
-      text: `*${t('table.columns.totalReviews')}:* 4`,
-    },
-    {
-      type: 'mrkdwn',
-      text: `*${t('table.columns.totalComments')}:* 1`,
-    },
-    {
-      type: 'mrkdwn',
-      text: `*${t('table.columns.timeToReview')}:* 34m`,
-    },
+  rows: [
+    [
+      {
+        type: 'raw_text',
+        text: 'Reviewer',
+      },
+      {
+        type: 'raw_text',
+        text: t('table.columns.totalReviews'),
+      },
+      {
+        type: 'raw_text',
+        text: t('table.columns.totalComments'),
+      },
+      {
+        type: 'raw_text',
+        text: t('table.columns.timeToReview'),
+      },
+    ],
+    [
+      {
+        type: 'rich_text',
+        elements: [
+          {
+            type: 'rich_text_section',
+            elements: [
+              {
+                type: 'emoji',
+                name: 'link',
+              },
+              {
+                text: ' user1',
+                type: 'text',
+              },
+            ],
+          },
+        ],
+      },
+      {
+        type: 'raw_text',
+        text: '4',
+      },
+      {
+        type: 'raw_text',
+        text: '1',
+      },
+      {
+        type: 'raw_text',
+        text: '34m',
+      },
+    ],
   ],
 };
 
 describe('Interactors | postSlackMessage | .buildReviewer', () => {
   describe('simplest case', () => {
-    it('builds a reviewers with basic config', () => {
+    it('builds a table with reviewers data', () => {
       const response = buildReviewer({ ...defaultParams });
-      expect(response).toEqual([
-        USERNAME,
-        STATS,
-        DIVIDER,
-      ]);
+      expect(response).toEqual(EXPECTED_TABLE);
     });
   });
 
   describe('requiring charts', () => {
-    it('adds a medal to username section', () => {
+    it('adds medals to reviewer names', () => {
       const response = buildReviewer({ ...defaultParams, displayCharts: true });
-      expect(response).toEqual([
-        {
-          ...USERNAME,
-          elements: [
-            USERNAME.elements[0],
+      const expectedTable = {
+        ...EXPECTED_TABLE,
+        rows: [
+          EXPECTED_TABLE.rows[0], // header row
+          [
             {
-              emoji: true,
-              type: 'plain_text',
-              text: 'user1 :first_place_medal:',
+              type: 'rich_text',
+              elements: [
+                {
+                  type: 'rich_text_section',
+                  elements: [
+                    {
+                      type: 'emoji',
+                      name: 'link',
+                    },
+                    {
+                      text: ' user1 :first_place_medal:',
+                      type: 'text',
+                    },
+                  ],
+                },
+              ],
+            },
+            {
+              type: 'raw_text',
+              text: '4',
+            },
+            {
+              type: 'raw_text',
+              text: '1',
+            },
+            {
+              type: 'raw_text',
+              text: '34m',
             },
           ],
-        },
-        STATS,
-        DIVIDER,
-      ]);
+        ],
+      };
+      expect(response).toEqual(expectedTable);
     });
   });
 
-  describe('requiring links', () => {
-    it('adds a medal to username section', () => {
-      const response = buildReviewer({ ...defaultParams, disableLinks: false });
-      expect(response).toEqual([
-        USERNAME,
-        {
-          ...STATS,
-          fields: [
-            STATS.fields[0],
-            STATS.fields[1],
-            {
-              type: 'mrkdwn',
-              text: `*${t('table.columns.timeToReview')}:* <https://app.flowwer.dev/charts/review-time/1|34m>`,
-            },
-          ],
-        },
-        DIVIDER,
-      ]);
+  describe('without charts', () => {
+    it('shows reviewer name without medals', () => {
+      const response = buildReviewer({ ...defaultParams, displayCharts: false });
+      expect(response).toEqual(EXPECTED_TABLE);
     });
   });
 });

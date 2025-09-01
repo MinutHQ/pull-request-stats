@@ -16,9 +16,14 @@ const parser = humanizeDuration.humanizer({
   },
 });
 
-module.exports = (value) => parser(value, {
-  delimiter: ' ',
-  spacer: '',
-  units: ['d', 'h', 'm'],
-  round: true,
-});
+module.exports = (value) => {
+  if (value === Infinity || value === -Infinity) {
+    return '∞';
+  }
+  return parser(value, {
+    delimiter: ' ',
+    spacer: '',
+    units: ['d', 'h', 'm'],
+    round: true,
+  });
+};

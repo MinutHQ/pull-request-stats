@@ -4,25 +4,38 @@ const URL = 'https://app.flowwer.dev/charts/review-time/';
 const MAX_URI_LENGTH = 1024;
 const CHARS_PER_REVIEW = 16;
 
-const toSeconds = (ms) => Math.round(ms / 1000);
+const toSeconds = (ms) => {
+  if (ms === Infinity || ms === -Infinity) {
+    return Infinity;
+  }
+  return Math.round(ms / 1000);
+};
 
-const compressInt = (int) => int.toString(36);
+const compressInt = (int) => {
+  if (int === Infinity || int === -Infinity) {
+    return 'inf';
+  }
+  return int.toString(36);
+};
 
 const compressDate = (date) => compressInt(Math.round(date.getTime() / 1000));
 
 const parseReview = ({ submittedAt, timeToReview }) => ({
   d: compressDate(submittedAt),
-  t: compressInt(toSeconds(timeToReview)),
+  t: timeToReview === Infinity ? 'inf' : compressInt(toSeconds(timeToReview)),
 });
 
 const buildUri = ({ author, period, reviews }) => {
+  // Filter out any reviews with Infinity timeToReview to prevent JSURL issues
+  const validReviews = reviews.filter((review) => review.t !== 'inf');
+
   const data = JSURL.stringify({
     u: {
       i: `${author.id}`,
       n: author.login,
     },
     p: period,
-    r: reviews,
+    r: validReviews,
   });
 
   const uri = `${URL}${data}`;

@@ -8,7 +8,6 @@ module.exports = ({
   reviewers,
   pullRequest,
   periodLength,
-  disableLinks,
   displayCharts,
 }) => ({
   blocks: [
@@ -20,17 +19,10 @@ module.exports = ({
       periodLength,
     }),
 
-    ...reviewers.reduce(
-      (prev, reviewer, index) => [
-        ...prev,
-        ...buildReviewer({
-          t,
-          index,
-          reviewer,
-          disableLinks,
-          displayCharts,
-        })],
-      [],
-    ),
+    buildReviewer({
+      t,
+      reviewers,
+      displayCharts,
+    }),
   ],
 });

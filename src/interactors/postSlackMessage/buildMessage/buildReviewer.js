@@ -6,67 +6,108 @@ const MEDALS = [
   ':third_place_medal:',
 ]; /* 🥇🥈🥉 */
 
-const getUsername = ({ index, reviewer, displayCharts }) => {
-  const { login, avatarUrl } = reviewer.author;
+const buildTableRow = ({
+  index, reviewer, displayCharts,
+}) => {
+  const { login } = reviewer.author;
+  const { stats } = reviewer;
 
   const medal = displayCharts ? MEDALS[index] : null;
-  const suffix = medal ? ` ${medal}` : '';
+  const medalName = medal ? medal.replace(/:/g, '') : null; // Remove colons for emoji name
 
-  return {
-    type: 'context',
-    elements: [
-      {
-        type: 'image',
-        image_url: avatarUrl,
-        alt_text: login,
-      },
-      {
-        emoji: true,
-        type: 'plain_text',
-        text: `${login}${suffix}`,
-      },
-    ],
-  };
-};
-
-const getStats = ({ t, reviewer, disableLinks }) => {
-  const { stats, urls } = reviewer;
   const timeToReviewStr = durationToString(stats.timeToReview);
-  const timeToReview = disableLinks
-    ? timeToReviewStr
-    : `<${urls.timeToReview}|${timeToReviewStr}>`;
 
-  return {
-    type: 'section',
-    fields: [
-      {
-        type: 'mrkdwn',
-        text: `*${t('table.columns.totalReviews')}:* ${stats.totalReviews}`,
-      },
-      {
-        type: 'mrkdwn',
-        text: `*${t('table.columns.totalComments')}:* ${stats.totalComments}`,
-      },
-      {
-        type: 'mrkdwn',
-        text: `*${t('table.columns.timeToReview')}:* ${timeToReview}`,
-      },
-    ],
-  };
+  // Build reviewer name with optional medal
+  const reviewerElements = [
+    {
+      text: login,
+      type: 'text',
+    },
+  ];
+
+  if (medalName) {
+    reviewerElements.push({
+      type: 'emoji',
+      name: medalName,
+    });
+  }
+
+  return [
+    {
+      type: 'rich_text',
+      elements: [
+        {
+          type: 'rich_text_section',
+          elements: reviewerElements,
+        },
+      ],
+    },
+    {
+      type: 'raw_text',
+      text: stats.totalReviews.toString(),
+    },
+    {
+      type: 'raw_text',
+      text: stats.totalComments.toString(),
+    },
+    {
+      type: 'raw_text',
+      text: timeToReviewStr,
+    },
+  ];
 };
-
-const getDivider = () => ({
-  type: 'divider',
-});
 
 module.exports = ({
   t,
-  index,
-  reviewer,
-  disableLinks,
+  reviewers,
   displayCharts,
-}) => [
-  getUsername({ index, reviewer, displayCharts }),
-  getStats({ t, reviewer, disableLinks }),
-  getDivider(),
-];
+}) => {
+  // Build header row
+  const headerRow = [
+    {
+      type: 'raw_text',
+      text: 'Reviewer',
+    },
+    {
+      type: 'raw_text',
+      text: t('table.columns.totalReviews'),
+    },
+    {
+      type: 'raw_text',
+      text: t('table.columns.totalComments'),
+    },
+    {
+      type: 'raw_text',
+      text: t('table.columns.timeToReview'),
+    },
+  ];
+
+  // Build data rows
+  const dataRows = reviewers.map((reviewer, index) => buildTableRow({
+    index,
+    reviewer,
+    displayCharts,
+  }));
+
+  return {
+    type: 'table',
+    column_settings: [
+      {
+        is_wrapped: true,
+      },
+      {
+        align: 'right',
+      },
+      {
+        align: 'right',
+      },
+      {
+        align: 'right',
+      },
+    ],
+    rows: [
+      headerRow,
+      ...dataRows,
+    ],
+  };
+};

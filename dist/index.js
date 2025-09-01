@@ -6980,14 +6980,17 @@ function useColors() {
 		return false;
 	}
 
+	let m;
+
 	// Is webkit? http://stackoverflow.com/a/16459606/376773
 	// document is undefined in react-native: https://github.com/facebook/react-native/pull/1632
+	// eslint-disable-next-line no-return-assign
 	return (typeof document !== 'undefined' && document.documentElement && document.documentElement.style && document.documentElement.style.WebkitAppearance) ||
 		// Is firebug? http://stackoverflow.com/a/398120/376773
 		(typeof window !== 'undefined' && window.console && (window.console.firebug || (window.console.exception && window.console.table))) ||
 		// Is firefox >= v31?
 		// https://developer.mozilla.org/en-US/docs/Tools/Web_Console#Styling_messages
-		(typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/) && parseInt(RegExp.$1, 10) >= 31) ||
+		(typeof navigator !== 'undefined' && navigator.userAgent && (m = navigator.userAgent.toLowerCase().match(/firefox\/(\d+)/)) && parseInt(m[1], 10) >= 31) ||
 		// Double check webkit in userAgent just in case we are in a worker
 		(typeof navigator !== 'undefined' && navigator.userAgent && navigator.userAgent.toLowerCase().match(/applewebkit\/(\d+)/));
 }
@@ -7071,7 +7074,7 @@ function save(namespaces) {
 function load() {
 	let r;
 	try {
-		r = exports.storage.getItem('debug');
+		r = exports.storage.getItem('debug') || exports.storage.getItem('DEBUG') ;
 	} catch (error) {
 		// Swallow
 		// XXX (@Qix-) should we be logging these?
@@ -7297,24 +7300,62 @@ function setup(env) {
 		createDebug.names = [];
 		createDebug.skips = [];
 
-		let i;
-		const split = (typeof namespaces === 'string' ? namespaces : '').split(/[\s,]+/);
-		const len = split.length;
+		const split = (typeof namespaces === 'string' ? namespaces : '')
+			.trim()
+			.replace(/\s+/g, ',')
+			.split(',')
+			.filter(Boolean);
 
-		for (i = 0; i < len; i++) {
-			if (!split[i]) {
-				// ignore empty strings
-				continue;
-			}
-
-			namespaces = split[i].replace(/\*/g, '.*?');
-
-			if (namespaces[0] === '-') {
-				createDebug.skips.push(new RegExp('^' + namespaces.slice(1) + '$'));
+		for (const ns of split) {
+			if (ns[0] === '-') {
+				createDebug.skips.push(ns.slice(1));
 			} else {
-				createDebug.names.push(new RegExp('^' + namespaces + '$'));
+				createDebug.names.push(ns);
 			}
 		}
+	}
+
+	/**
+	 * Checks if the given string matches a namespace template, honoring
+	 * asterisks as wildcards.
+	 *
+	 * @param {String} search
+	 * @param {String} template
+	 * @return {Boolean}
+	 */
+	function matchesTemplate(search, template) {
+		let searchIndex = 0;
+		let templateIndex = 0;
+		let starIndex = -1;
+		let matchIndex = 0;
+
+		while (searchIndex < search.length) {
+			if (templateIndex < template.length && (template[templateIndex] === search[searchIndex] || template[templateIndex] === '*')) {
+				// Match character or proceed with wildcard
+				if (template[templateIndex] === '*') {
+					starIndex = templateIndex;
+					matchIndex = searchIndex;
+					templateIndex++; // Skip the '*'
+				} else {
+					searchIndex++;
+					templateIndex++;
+				}
+			} else if (starIndex !== -1) { // eslint-disable-line no-negated-condition
+				// Backtrack to the last '*' and try to match more characters
+				templateIndex = starIndex + 1;
+				matchIndex++;
+				searchIndex = matchIndex;
+			} else {
+				return false; // No match
+			}
+		}
+
+		// Handle trailing '*' in template
+		while (templateIndex < template.length && template[templateIndex] === '*') {
+			templateIndex++;
+		}
+
+		return templateIndex === template.length;
 	}
 
 	/**
@@ -7325,8 +7366,8 @@ function setup(env) {
 	*/
 	function disable() {
 		const namespaces = [
-			...createDebug.names.map(toNamespace),
-			...createDebug.skips.map(toNamespace).map(namespace => '-' + namespace)
+			...createDebug.names,
+			...createDebug.skips.map(namespace => '-' + namespace)
 		].join(',');
 		createDebug.enable('');
 		return namespaces;
@@ -7340,39 +7381,19 @@ function setup(env) {
 	* @api public
 	*/
 	function enabled(name) {
-		if (name[name.length - 1] === '*') {
-			return true;
-		}
-
-		let i;
-		let len;
-
-		for (i = 0, len = createDebug.skips.length; i < len; i++) {
-			if (createDebug.skips[i].test(name)) {
+		for (const skip of createDebug.skips) {
+			if (matchesTemplate(name, skip)) {
 				return false;
 			}
 		}
 
-		for (i = 0, len = createDebug.names.length; i < len; i++) {
-			if (createDebug.names[i].test(name)) {
+		for (const ns of createDebug.names) {
+			if (matchesTemplate(name, ns)) {
 				return true;
 			}
 		}
 
 		return false;
-	}
-
-	/**
-	* Convert regexp to namespace
-	*
-	* @param {RegExp} regxep
-	* @return {String} namespace
-	* @api private
-	*/
-	function toNamespace(regexp) {
-		return regexp.toString()
-			.substring(2, regexp.toString().length - 2)
-			.replace(/\.\*\?$/, '*');
 	}
 
 	/**
@@ -15305,7 +15326,7 @@ var y = d * 365.25;
  * @api public
  */
 
-module.exports = function(val, options) {
+module.exports = function (val, options) {
   options = options || {};
   var type = typeof val;
   if (type === 'string' && val.length > 0) {
@@ -40929,6 +40950,7 @@ const run = async (params) => {
     displayCharts,
     pullRequestId,
     excludeTitleRegex,
+    requiredAuthors,
   } = params;
 
   const pullRequest = pullRequestId
@@ -40950,8 +40972,9 @@ const run = async (params) => {
   core.info(`Found ${pulls.length} pull requests to analyze`);
   // Log the title of each pull request
   pulls.forEach((pull) => core.debug(`Pull request title: ${pull.title}`));
-  const reviewersRaw = getReviewers(pulls, { excludeStr: params.excludeStr });
+  const reviewersRaw = getReviewers(pulls, { excludeStr: params.excludeStr, requiredAuthors });
   core.info(`Analyzed stats for ${reviewersRaw.length} pull request reviewers`);
+  core.debug(`Reviewers raw data: ${JSON.stringify(reviewersRaw.map((r) => ({ login: r.author.login, stats: r.stats })), null, 2)}`);
 
   const reviewers = setUpReviewers({
     limit,
@@ -41425,6 +41448,10 @@ const AVATAR_SIZE = {
 const noParse = (value) => value;
 
 const generateChart = (percentage = 0) => {
+  // Handle Infinity, -Infinity, and NaN values
+  if (!Number.isFinite(percentage) || isNaN(percentage)) {
+    return '';
+  }
   const length = Math.round(percentage * CHART_MAX_LENGTH);
   return Array(length).fill(CHART_CHARACTER).join('');
 };
@@ -41537,7 +41564,7 @@ module.exports = ({
   disableLinks,
   displayCharts,
 }) => {
-  const execute = () => {
+    const execute = () => {
     const allStats = reviewers.map((r) => r.stats);
     const bests = calculateBests(allStats);
 
@@ -41657,6 +41684,16 @@ const { sum, median, divide } = __nccwpck_require__(9988);
 const getProperty = (list, prop) => list.map((el) => el[prop]);
 
 module.exports = (reviews) => {
+  // Handle empty reviews array
+  if (!reviews || reviews.length === 0) {
+    return {
+      totalReviews: 0,
+      totalComments: 0,
+      commentsPerReview: 0,
+      timeToReview: Infinity,
+    };
+  }
+
   const pullRequestIds = getProperty(reviews, 'pullRequestId');
   const totalReviews = new Set(pullRequestIds).size;
   const totalComments = sum(getProperty(reviews, 'commentsCount'));
@@ -41724,14 +41761,49 @@ const filterReviewer = __nccwpck_require__(3966);
 const parseExclude = __nccwpck_require__(7960);
 const groupReviews = __nccwpck_require__(9633);
 
-module.exports = (pulls, { excludeStr } = {}) => {
+const parseArray = (value) => (value ? value.split(',').map((item) => item.trim()) : []);
+
+const createDefaultAuthor = (login) => ({
+  id: `required-${login}`,
+  url: `https://github.com/${login}`,
+  login,
+  avatarUrl: `https://github.com/${login}.png`,
+});
+
+const createDefaultStats = () => ({
+  totalReviews: 0,
+  totalComments: 0,
+  commentsPerReview: 0,
+  timeToReview: Infinity,
+});
+
+module.exports = (pulls, { excludeStr, requiredAuthors } = {}) => {
   const exclude = parseExclude(excludeStr);
-  return groupReviews(pulls)
+  const requiredAuthorsList = parseArray(requiredAuthors);
+
+  const reviewers = groupReviews(pulls)
     .filter(({ author }) => filterReviewer(exclude, author.login))
     .map(({ author, reviews }) => {
       const stats = calculateReviewsStats(reviews);
       return { author, reviews, stats };
     });
+
+  // Add required authors that are not already in the reviewers list
+  const existingLogins = new Set(reviewers.map((r) => r.author.login));
+  const missingRequiredAuthors = requiredAuthorsList.filter((login) => !existingLogins.has(login));
+
+  const requiredReviewers = missingRequiredAuthors.map((login) => {
+    const defaultAuthor = createDefaultAuthor(login);
+    const defaultStats = createDefaultStats();
+    return {
+      author: defaultAuthor,
+      reviews: [],
+      stats: defaultStats,
+    };
+  });
+
+  const result = [...reviewers, ...requiredReviewers];
+  return result;
 };
 
 
@@ -41843,70 +41915,111 @@ const MEDALS = [
   ':third_place_medal:',
 ]; /* 🥇🥈🥉 */
 
-const getUsername = ({ index, reviewer, displayCharts }) => {
-  const { login, avatarUrl } = reviewer.author;
+const buildTableRow = ({
+  index, reviewer, displayCharts,
+}) => {
+  const { login } = reviewer.author;
+  const { stats } = reviewer;
 
   const medal = displayCharts ? MEDALS[index] : null;
-  const suffix = medal ? ` ${medal}` : '';
+  const medalName = medal ? medal.replace(/:/g, '') : null; // Remove colons for emoji name
 
-  return {
-    type: 'context',
-    elements: [
-      {
-        type: 'image',
-        image_url: avatarUrl,
-        alt_text: login,
-      },
-      {
-        emoji: true,
-        type: 'plain_text',
-        text: `${login}${suffix}`,
-      },
-    ],
-  };
-};
-
-const getStats = ({ t, reviewer, disableLinks }) => {
-  const { stats, urls } = reviewer;
   const timeToReviewStr = durationToString(stats.timeToReview);
-  const timeToReview = disableLinks
-    ? timeToReviewStr
-    : `<${urls.timeToReview}|${timeToReviewStr}>`;
 
-  return {
-    type: 'section',
-    fields: [
-      {
-        type: 'mrkdwn',
-        text: `*${t('table.columns.totalReviews')}:* ${stats.totalReviews}`,
-      },
-      {
-        type: 'mrkdwn',
-        text: `*${t('table.columns.totalComments')}:* ${stats.totalComments}`,
-      },
-      {
-        type: 'mrkdwn',
-        text: `*${t('table.columns.timeToReview')}:* ${timeToReview}`,
-      },
-    ],
-  };
+  // Build reviewer name with optional medal
+  const reviewerElements = [
+    {
+      text: login,
+      type: 'text',
+    },
+  ];
+
+  if (medalName) {
+    reviewerElements.push({
+      type: 'emoji',
+      name: medalName,
+    });
+  }
+
+  return [
+    {
+      type: 'rich_text',
+      elements: [
+        {
+          type: 'rich_text_section',
+          elements: reviewerElements,
+        },
+      ],
+    },
+    {
+      type: 'raw_text',
+      text: stats.totalReviews.toString(),
+    },
+    {
+      type: 'raw_text',
+      text: stats.totalComments.toString(),
+    },
+    {
+      type: 'raw_text',
+      text: timeToReviewStr,
+    },
+  ];
 };
-
-const getDivider = () => ({
-  type: 'divider',
-});
 
 module.exports = ({
   t,
-  index,
-  reviewer,
-  disableLinks,
+  reviewers,
   displayCharts,
-}) => [
-  getUsername({ index, reviewer, displayCharts }),
-  getStats({ t, reviewer, disableLinks }),
-  getDivider(),
-];
+}) => {
+  // Build header row
+  const headerRow = [
+    {
+      type: 'raw_text',
+      text: 'Reviewer',
+    },
+    {
+      type: 'raw_text',
+      text: t('table.columns.totalReviews'),
+    },
+    {
+      type: 'raw_text',
+      text: t('table.columns.totalComments'),
+    },
+    {
+      type: 'raw_text',
+      text: t('table.columns.timeToReview'),
+    },
+  ];
+
+  // Build data rows
+  const dataRows = reviewers.map((reviewer, index) => buildTableRow({
+    index,
+    reviewer,
+    displayCharts,
+  }));
+
+  return {
+    type: 'table',
+    column_settings: [
+      {
+        is_wrapped: true,
+      },
+      {
+        align: 'right',
+      },
+      {
+        align: 'right',
+      },
+      {
+        align: 'right',
+      },
+    ],
+    rows: [
+      headerRow,
+      ...dataRows,
+    ],
+  };
+};
 
 
 /***/ }),
@@ -41963,7 +42076,6 @@ module.exports = ({
   reviewers,
   pullRequest,
   periodLength,
-  disableLinks,
   displayCharts,
 }) => ({
   blocks: [
@@ -41975,18 +42087,11 @@ module.exports = ({
       periodLength,
     }),
 
-    ...reviewers.reduce(
-      (prev, reviewer, index) => [
-        ...prev,
-        ...buildReviewer({
-          t,
-          index,
-          reviewer,
-          disableLinks,
-          displayCharts,
-        })],
-      [],
-    ),
+    buildReviewer({
+      t,
+      reviewers,
+      displayCharts,
+    }),
   ],
 });
 
@@ -42498,25 +42603,38 @@ const URL = 'https://app.flowwer.dev/charts/review-time/';
 const MAX_URI_LENGTH = 1024;
 const CHARS_PER_REVIEW = 16;
 
-const toSeconds = (ms) => Math.round(ms / 1000);
+const toSeconds = (ms) => {
+  if (ms === Infinity || ms === -Infinity) {
+    return Infinity;
+  }
+  return Math.round(ms / 1000);
+};
 
-const compressInt = (int) => int.toString(36);
+const compressInt = (int) => {
+  if (int === Infinity || int === -Infinity) {
+    return 'inf';
+  }
+  return int.toString(36);
+};
 
 const compressDate = (date) => compressInt(Math.round(date.getTime() / 1000));
 
 const parseReview = ({ submittedAt, timeToReview }) => ({
   d: compressDate(submittedAt),
-  t: compressInt(toSeconds(timeToReview)),
+  t: timeToReview === Infinity ? 'inf' : compressInt(toSeconds(timeToReview)),
 });
 
 const buildUri = ({ author, period, reviews }) => {
+  // Filter out any reviews with Infinity timeToReview to prevent JSURL issues
+  const validReviews = reviews.filter((review) => review.t !== 'inf');
+
   const data = JSURL.stringify({
     u: {
       i: `${author.id}`,
       n: author.login,
     },
     p: period,
-    r: reviews,
+    r: validReviews,
   });
 
   const uri = `${URL}${data}`;
@@ -42590,7 +42708,12 @@ const getContributions = __nccwpck_require__(5307);
 const calculateTotals = __nccwpck_require__(1951);
 const sortByStats = __nccwpck_require__(6214);
 
-const applyLimit = (data, limit) => (limit > 0 ? data.slice(0, limit) : data);
+const applyLimit = (data, limit) => {
+  if (limit && limit > 0 && Number.isInteger(limit)) {
+    return data.slice(0, limit);
+  }
+  return data;
+};
 
 const getUrls = ({ reviewer, periodLength }) => ({
   timeToReview: buildReviewTimeLink(reviewer, periodLength),
@@ -42605,12 +42728,20 @@ module.exports = ({
   const allStats = reviewers.map((r) => r.stats);
   const totals = calculateTotals(allStats);
 
-  return applyLimit(sortByStats(reviewers, sortBy), limit)
-    .map((reviewer) => ({
+  const sortedReviewers = sortByStats(reviewers, sortBy);
+  const limitedReviewers = applyLimit(sortedReviewers, limit);
+
+  const result = limitedReviewers.map((reviewer) => {
+    const contributions = getContributions(reviewer, totals);
+    const urls = getUrls({ reviewer, periodLength });
+    return {
       ...reviewer,
-      contributions: getContributions(reviewer, totals),
-      urls: getUrls({ reviewer, periodLength }),
-    }));
+      contributions,
+      urls,
+    };
+  });
+
+  return result;
 };
 
 
@@ -43163,12 +43294,17 @@ const parser = humanizeDuration.humanizer({
   },
 });
 
-module.exports = (value) => parser(value, {
-  delimiter: ' ',
-  spacer: '',
-  units: ['d', 'h', 'm'],
-  round: true,
-});
+module.exports = (value) => {
+  if (value === Infinity || value === -Infinity) {
+    return '∞';
+  }
+  return parser(value, {
+    delimiter: ' ',
+    spacer: '',
+    units: ['d', 'h', 'm'],
+    round: true,
+  });
+};
 
 
 /***/ }),
@@ -48112,6 +48248,7 @@ const getParams = () => {
     limit: parseInt(core.getInput('limit'), 10),
     excludeStr: core.getInput('exclude'),
     excludeTitleRegex: core.getInput('excludeTitle'),
+    requiredAuthors: core.getInput('requiredAuthors'),
     telemetry: core.getBooleanInput('telemetry'),
     webhook: core.getInput('webhook'),
     slack: {

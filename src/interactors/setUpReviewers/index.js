@@ -3,7 +3,12 @@ const getContributions = require('./getContributions');
 const calculateTotals = require('./calculateTotals');
 const sortByStats = require('./sortByStats');
 
-const applyLimit = (data, limit) => (limit > 0 ? data.slice(0, limit) : data);
+const applyLimit = (data, limit) => {
+  if (limit && limit > 0 && Number.isInteger(limit)) {
+    return data.slice(0, limit);
+  }
+  return data;
+};
 
 const getUrls = ({ reviewer, periodLength }) => ({
   timeToReview: buildReviewTimeLink(reviewer, periodLength),
@@ -18,10 +23,18 @@ module.exports = ({
   const allStats = reviewers.map((r) => r.stats);
   const totals = calculateTotals(allStats);
 
-  return applyLimit(sortByStats(reviewers, sortBy), limit)
-    .map((reviewer) => ({
+  const sortedReviewers = sortByStats(reviewers, sortBy);
+  const limitedReviewers = applyLimit(sortedReviewers, limit);
+
+  const result = limitedReviewers.map((reviewer) => {
+    const contributions = getContributions(reviewer, totals);
+    const urls = getUrls({ reviewer, periodLength });
+    return {
       ...reviewer,
-      contributions: getContributions(reviewer, totals),
-      urls: getUrls({ reviewer, periodLength }),
-    }));
+      contributions,
+      urls,
+    };
+  });
+
+  return result;
 };

@@ -39,6 +39,19 @@ Just add this action to one of your [workflow files](https://docs.github.com/en/
         uses: flowwer-dev/pull-request-stats@master
 ```
 
+### Examples
+
+#### Include specific authors even if they have no reviews
+
+```yml
+      - name: Run pull request stats
+        uses: flowwer-dev/pull-request-stats@master
+        with:
+          requiredAuthors: 'john-doe,jane-smith'
+```
+
+This will ensure that `john-doe` and `jane-smith` appear in the stats table even if they haven't reviewed any pull requests in the specified period. They will show with 0 reviews, 0 comments, and infinite time to review.
+
 If you are getting an empty table or an error, check the [troubleshooting section](#troubleshooting).
 
 ### Action inputs
@@ -58,6 +71,7 @@ The possible inputs for this action are:
 | `publishAs` | Where to publish the results. Possible values: as a `COMMENT`, on the pull request `DESCRIPTION`, or publish `NONE`. | `COMMENT` |
 | `exclude` | A comma-separated list of usernames (case-insensitive) to be excluded from the results (e.g. `username1,username2`), or a regular expression enclosed between slashes (eg. `/^bot/i` will exclude all usernames that begin with "bot"). | `null` |
 | `excludeTitle` | A regex pattern to exclude the PRs with a title that matches the pattern. | `null` |
+| `requiredAuthors` | A comma-separated list of GitHub usernames that must be included in the stats even if they have no reviews (e.g. `username1,username2`). These authors will appear with 0 reviews, 0 comments, and infinite time to review. | `null` |
 | `telemetry` | Indicates if the action is allowed to send monitoring data to the developer. This data is [minimal](/src/services/telemetry/sendStart.js) and helps me improve this action. **This option is a premium feature reserved for [sponsors](#premium-features-).** |`true`|
 | `slackWebhook` | **🔥 New.** A Slack webhook URL to post resulting stats. **This option is a premium feature reserved for [sponsors](#premium-features-).** See [full documentation here](/docs/slack.md).  | `null` |
 | `slackChannel` | The Slack channel where stats will be posted. Include the `#` character (eg. `#mychannel`). Required when a `slackWebhook` is configured. | `null` |

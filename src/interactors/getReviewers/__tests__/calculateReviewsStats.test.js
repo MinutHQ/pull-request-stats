@@ -19,4 +19,14 @@ describe('Interactors | getReviewers | .calculateReviewsStats', () => {
   it('calculates the timeToReview', () => {
     expect(result.timeToReview).toBe(75000);
   });
+
+  it('handles empty reviews array', () => {
+    const emptyResult = calculateReviewsStats([]);
+    expect(emptyResult).toEqual({
+      totalReviews: 0,
+      totalComments: 0,
+      commentsPerReview: 0,
+      timeToReview: Infinity,
+    });
+  });
 });

@@ -17,6 +17,10 @@ const AVATAR_SIZE = {
 const noParse = (value) => value;
 
 const generateChart = (percentage = 0) => {
+  // Handle Infinity, -Infinity, and NaN values
+  if (!Number.isFinite(percentage) || isNaN(percentage)) {
+    return '';
+  }
   const length = Math.round(percentage * CHART_MAX_LENGTH);
   return Array(length).fill(CHART_CHARACTER).join('');
 };
