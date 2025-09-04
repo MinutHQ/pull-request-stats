@@ -40970,8 +40970,14 @@ const run = async (params) => {
     startDate: subtractDaysToDate(new Date(), periodLength),
   });
   core.info(`Found ${pulls.length} pull requests to analyze`);
-  // Log the title of each pull request
-  pulls.forEach((pull) => core.debug(`Pull request title: ${pull.title}`));
+  
+  // Console log all pull request titles for visibility
+  console.log(`\n=== Pull Request Titles ===`);
+  pulls.forEach((pull, index) => {
+    console.log(`${index + 1}. ${pull.title}`);
+    core.debug(`Pull request title: ${pull.title}`);
+  });
+  console.log(`=== End of Pull Request Titles ===\n`);
   const reviewersRaw = getReviewers(pulls, { excludeStr: params.excludeStr, requiredAuthors });
   core.info(`Analyzed stats for ${reviewersRaw.length} pull request reviewers`);
   core.debug(`Reviewers raw data: ${JSON.stringify(reviewersRaw.map((r) => ({ login: r.author.login, stats: r.stats })), null, 2)}`);
@@ -41623,6 +41629,7 @@ module.exports = async (_params) => true;
 
 const { fetchPullRequests } = __nccwpck_require__(8001);
 const { parsePullRequest } = __nccwpck_require__(566);
+const core = __nccwpck_require__(2186);
 
 const filterNullAuthor = ({ node }) => !!node.author;
 
@@ -41631,9 +41638,8 @@ const ownerFilter = ({ org, repos }) => {
   return (repos || []).map((r) => `repo:${r}`).join(' ');
 };
 
-const buildQuery = ({ org, repos, startDate }) => {
-  const dateFilter = `created:>=${startDate.toISOString()}`;
-  return `type:pr sort:author-date ${ownerFilter({ org, repos })} ${dateFilter}`;
+const buildQuery = ({ org, repos }) => {
+  return `type:pr sort:created-desc ${ownerFilter({ org, repos })}`;
 };
 
 // eslint-disable-next-line arrow-body-style
@@ -41641,22 +41647,67 @@ const filterPullsByTitle = ({ pulls, excludeTitleRegex }) => {
   return pulls.filter((pull) => !pull.title.match(excludeTitleRegex));
 };
 
+const filterReviewsByDate = ({ pulls, startDate }) => {
+  const startDateObj = new Date(startDate);
+  core.info(`Filtering reviews with startDate: ${startDateObj.toISOString()}`);
+  
+  return pulls
+    .map((pull) => {
+      const originalReviewCount = (pull.reviews || []).length;
+      const filteredReviews = (pull.reviews || []).filter((review) => {
+        const reviewDate = new Date(review.submittedAt);
+        const isValid = reviewDate >= startDateObj;
+        if (!isValid && originalReviewCount > 0) {
+          core.info(`Filtered out review from ${reviewDate.toISOString()} (before ${startDateObj.toISOString()})`);
+        }
+        return isValid;
+      });
+      
+      if (originalReviewCount > 0 && filteredReviews.length === 0) {
+        core.info(`PR "${pull.title}" had ${originalReviewCount} reviews but none after ${startDateObj.toISOString()}`);
+      }
+      
+      return {
+        ...pull,
+        reviews: filteredReviews,
+      };
+    })
+    .filter((pull) => pull.reviews.length > 0);
+};
+
 const getPullRequests = async (params) => {
-  const { limit, excludeTitleRegex } = params;
+  const { limit, excludeTitleRegex, startDate } = params;
   const data = await fetchPullRequests(params);
   const edges = data.search.edges || [];
+  core.info(`Fetched ${edges.length} PR edges from API`);
+  
   let results = edges
     .filter(filterNullAuthor)
     .map(parsePullRequest);
+  core.info(`After filtering null authors and parsing: ${results.length} PRs`);
 
   if (excludeTitleRegex) {
+    const beforeTitleFilter = results.length;
     results = filterPullsByTitle({ pulls: results, excludeTitleRegex });
+    core.info(`After title filtering (${excludeTitleRegex}): ${results.length} PRs (removed ${beforeTitleFilter - results.length})`);
+  }
+
+  if (startDate) {
+    const beforeDateFilter = results.length;
+    const totalReviews = results.reduce((sum, pr) => sum + (pr.reviews || []).length, 0);
+    core.info(`Before date filtering: ${beforeDateFilter} PRs with ${totalReviews} total reviews`);
+    
+    results = filterReviewsByDate({ pulls: results, startDate });
+    const afterTotalReviews = results.reduce((sum, pr) => sum + (pr.reviews || []).length, 0);
+    core.info(`After date filtering (startDate: ${startDate}): ${results.length} PRs with ${afterTotalReviews} reviews (removed ${beforeDateFilter - results.length} PRs)`);
   }
 
   if (edges.length < limit) return results;
 
-  const last = results[results.length - 1].cursor;
-  return results.concat(await getPullRequests({ ...params, after: last }));
+  const last = results[results.length - 1];
+  if (!last) return results;
+  
+  return results.concat(await getPullRequests({ ...params, after: last.cursor }));
 };
 
 module.exports = ({
@@ -41667,9 +41718,10 @@ module.exports = ({
   startDate,
   itemsPerPage = 100,
 }) => {
-  const search = buildQuery({ org, repos, startDate });
+  const search = buildQuery({ org, repos });
+  core.info(`search: ${search}`);
   return getPullRequests({
-    octokit, search, limit: itemsPerPage, excludeTitleRegex,
+    octokit, search, limit: itemsPerPage, excludeTitleRegex, startDate,
   });
 };
 
@@ -41730,22 +41782,58 @@ module.exports = (pulls) => {
   const removeWithEmptyId = ({ id }) => !!id;
 
   const all = Object.values(pulls).reduce((acc, pull) => {
-    const reviews = pull.reviews
-      .filter(removeOwnPulls)
-      .filter(removeWithEmptyId)
-      .map((r) => ({ ...r, pullRequestId: pull.id }));
+    // Debug each review before filtering
+    console.log(`\n--- PR ${pull.id} (${pull.title}) ---`);
+    console.log(`Total reviews: ${pull.reviews.length}`);
+    
+    pull.reviews.forEach((review, index) => {
+      console.log(`Review ${index + 1}: author=${review.author?.login || 'NO_AUTHOR'}, isOwnPull=${review.isOwnPull}, id=${review.id || 'NO_ID'}`);
+    });
+    
+    // Test each filter separately to see which one is removing reviews
+    // const afterOwnPullsFilter = pull.reviews.filter(removeOwnPulls); // Commented out to count ALL reviews
+    const afterOwnPullsFilter = pull.reviews; // Count all reviews including self-reviews
+    const afterIdFilter = afterOwnPullsFilter.filter(removeWithEmptyId);
+    
+    console.log(`After ownPulls filter: ${afterOwnPullsFilter.length} reviews`);
+    console.log(`After ID filter: ${afterIdFilter.length} reviews`);
+    
+    const reviews = afterIdFilter.map((r) => ({ ...r, pullRequestId: pull.id }));
+    
+    console.log(`Final reviews: ${reviews.length}`);
+    
     return acc.concat(reviews);
   }, []);
 
+  // Group reviews by author ID - this will now count ALL reviews from each author
+  // including multiple re-reviews on the same PR
   const byAuthor = all.reduce((acc, review) => {
     const { author, isOwnPull, ...other } = review;
     const key = author.id;
 
     if (!acc[key]) acc[key] = { author, reviews: [] };
 
+    // Always push the review - this ensures multiple reviews from same author on same PR are counted
     acc[key].reviews.push(other);
     return acc;
   }, {});
+
+  // Debug logging to see what's being grouped
+  console.log(`\n=== Review Grouping Debug ===`);
+  Object.entries(byAuthor).forEach(([authorId, authorData]) => {
+    console.log(`Author ${authorData.author.login} (${authorId}): ${authorData.reviews.length} reviews`);
+    // Show PR IDs for each review to verify multiple reviews on same PR are counted
+    const prCounts = authorData.reviews.reduce((acc, review) => {
+      acc[review.pullRequestId] = (acc[review.pullRequestId] || 0) + 1;
+      return acc;
+    }, {});
+    Object.entries(prCounts).forEach(([prId, count]) => {
+      if (count > 1) {
+        console.log(`  - PR ${prId}: ${count} reviews (multiple reviews detected!)`);
+      }
+    });
+  });
+  console.log(`=== End Review Grouping Debug ===\n`);
 
   return Object.values(byAuthor);
 };

@@ -53,8 +53,14 @@ const run = async (params) => {
     startDate: subtractDaysToDate(new Date(), periodLength),
   });
   core.info(`Found ${pulls.length} pull requests to analyze`);
-  // Log the title of each pull request
-  pulls.forEach((pull) => core.debug(`Pull request title: ${pull.title}`));
+  
+  // Console log all pull request titles for visibility
+  console.log(`\n=== Pull Request Titles ===`);
+  pulls.forEach((pull, index) => {
+    console.log(`${index + 1}. ${pull.title}`);
+    core.debug(`Pull request title: ${pull.title}`);
+  });
+  console.log(`=== End of Pull Request Titles ===\n`);
   const reviewersRaw = getReviewers(pulls, { excludeStr: params.excludeStr, requiredAuthors });
   core.info(`Analyzed stats for ${reviewersRaw.length} pull request reviewers`);
   core.debug(`Reviewers raw data: ${JSON.stringify(reviewersRaw.map((r) => ({ login: r.author.login, stats: r.stats })), null, 2)}`);
